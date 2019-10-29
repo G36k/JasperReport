@@ -1,0 +1,333 @@
+/* Pozdrav,
+
+ovo je klasa koju sam napravio za povezivanje aplikacije i ispisa reporta koristeći JasperReport */
+
+
+
+
+package view;
+
+import oracle.adf.model.binding.DCIteratorBinding;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.sql.Connection;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.faces.context.FacesContext;
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
+
+import net.sf.jasperreports.engine.JasperExportManager;
+import net.sf.jasperreports.engine.JasperFillManager;
+import net.sf.jasperreports.engine.JasperPrint;
+import net.sf.jasperreports.engine.JasperReport;
+import net.sf.jasperreports.engine.type.WhenNoDataTypeEnum;
+import net.sf.jasperreports.engine.util.JRLoader;
+import net.sf.jasperreports.engine.JRException;
+import net.sf.jasperreports.engine.export.JRPdfExporter;
+import net.sf.jasperreports.export.SimpleExporterInput;
+import net.sf.jasperreports.export.SimpleOutputStreamExporterOutput;
+import net.sf.jasperreports.export.SimplePdfExporterConfiguration;
+
+
+import oracle.adf.model.BindingContext;
+import oracle.adf.view.rich.component.rich.input.RichInputDate;
+import oracle.adf.view.rich.component.rich.input.RichInputText;
+import oracle.binding.BindingContainer;
+
+
+import java.util.ArrayList;
+import java.util.List;
+
+
+
+public class JasperBean
+{
+    private RichInputDate datumOd;
+    private RichInputDate datumDo;
+    private RichInputText JMBOC;
+
+     
+    
+
+public String runMP10Plavi()
+    {
+        
+      DCIteratorBinding nalogIter = (DCIteratorBinding) getBindings().get("MaterijalniNaloziView1Iterator");
+        
+      String nalogId = nalogIter.getCurrentRow().getAttribute("Id").toString();
+        
+      Map m = new HashMap();
+        
+      m.put("IdNaloga", nalogId);// gdje je IdNaloga jasper report parametar
+      try
+      {  
+        runReport("MEV_A4_PLAVI.jasper", m);
+          
+      }
+      catch (Exception e)
+      {
+      }
+      return null;
+    }
+
+   
+    
+    
+    public String runIzvjesceMP10()
+    {
+        
+      DCIteratorBinding nalogIter = (DCIteratorBinding) getBindings().get("OPSIzdanaSredstva1Iterator");
+        
+      String nalogId = nalogIter.getCurrentRow().getAttribute("PrvaSamostalnaSifra").toString();
+        
+      Map m = new HashMap();
+   
+        String dat1 =getDatumOd().getValue().toString();
+           
+        
+        String dat2 =getDatumDo().getValue().toString();
+       
+     
+        String JMBC =getJMBOC().getValue().toString();
+        
+        
+      m.put("parPrvaSamostalna", nalogId);// gdje je parPrvaSamostalna jasper report parametar
+      
+      m.put("Zaduzenje1", dat1);// gdje je Zaduzenje1 jasper report parametar
+      m.put("Zaduzenje2", dat2);// gdje je Zaduzenje2 jasper report parametar
+      m.put("JMBOC", JMBC);// gdje je JMBOC jasper report parametar
+      try
+      {  
+        runReport("OPSIspis.jasper", m);
+          
+      }
+      catch (Exception e)
+      {
+      }
+      return null;
+    }
+    
+
+
+   
+  
+//spajanje na DATASOURCE
+ 
+  public BindingContainer getBindings()
+  {
+    return BindingContext.getCurrent().getCurrentBindingsEntry();
+  }
+ 
+  public Connection getDataSourceConnection(String dataSourceName)
+      throws Exception
+    {
+      Context ctx = new InitialContext();
+      DataSource ds = (DataSource)ctx.lookup(dataSourceName);
+      return ds.getConnection();
+    }
+ 
+  private Connection getConnection() throws Exception
+  { 
+    return getDataSourceConnection("MEVREP");// datasource ime se definira u weblogicu
+  }
+ 
+  public  ServletContext getContext()
+    {
+      return (ServletContext)getFacesContext().getExternalContext().getContext();
+    }
+  public  HttpServletResponse getResponse()
+    {
+      return (HttpServletResponse)getFacesContext().getExternalContext().getResponse();
+    }
+  public static FacesContext getFacesContext()
+    {
+      return FacesContext.getCurrentInstance();
+    }
+  public void runReport(String repPath, java.util.Map param) throws Exception
+  {  
+    Connection conn = null;
+      
+    try
+    {  
+      HttpServletResponse response = getResponse();
+      ServletOutputStream out = response.getOutputStream();
+      response.setHeader("Cache-Control", "max-age=0");
+      response.setContentType("application/pdf");
+      ServletContext context = getContext();  
+        
+       
+       
+       InputStream fs = context.getResourceAsStream("/Reports/" + repPath);
+        
+       JasperReport template= (JasperReport)JRLoader.loadObject(fs);
+        
+       
+       
+      template.setWhenNoDataType(WhenNoDataTypeEnum.ALL_SECTIONS_NO_DETAIL);
+       
+      conn = getConnection();
+        
+      JasperPrint print = JasperFillManager.fillReport(template, param, conn);
+        
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+       
+      JasperExportManager.exportReportToPdfStream(print, baos);
+        
+      out.write(baos.toByteArray()); 
+        
+      out.flush();
+        
+      out.close();
+        
+      FacesContext.getCurrentInstance().responseComplete();
+        
+    }
+    catch (Exception jex)
+     
+    {
+      jex.printStackTrace();
+       
+    }
+    finally
+    {   
+       
+      close(conn);
+        
+    }
+  }
+ 
+  public void close(Connection con)
+   {
+     if (con != null)
+     {
+       try
+       {
+           System.out.println("closing in public void close");
+         con.close();
+       }
+       catch (Exception e)
+       {
+           System.err.println("error in closing connection -- " + e);
+       }
+     }
+   }
+   
+
+// spajanje nekoliko reporta u jedan PDF
+
+    protected String pathRoot = "/Reports/";
+    protected String pathB = "MEV_A4_BIJELI.jasper";
+    protected String pathC = "MEV_A4_CRVENI.jasper";
+    protected String pathC1 = "MEV_A4_CRVENI_1.jasper";
+    protected String pathP = "MEV_A4_PLAVI.jasper";
+    
+    
+    
+    
+
+    public HashMap<String, Object> bindParam(final String iter, final String attr) {
+        HashMap<String, Object> params = new HashMap<String, Object>();
+        DCIteratorBinding nalogIter = (DCIteratorBinding) getBindings().get(iter);
+        String nalogId = nalogIter.getCurrentRow().getAttribute(attr).toString();
+        params.put("IdNaloga", nalogId);
+        return params;
+    }
+
+    public JasperPrint addReport(String path, java.util.Map<String, Object> param) throws Exception {
+        ServletContext context = getContext();
+        Connection conn = getConnection();
+        InputStream is = context.getResourceAsStream(path);
+        JasperReport template = (JasperReport) JRLoader.loadObject(is);
+        template.setWhenNoDataType(WhenNoDataTypeEnum.ALL_SECTIONS_NO_DETAIL);
+        JasperPrint jp = JasperFillManager.fillReport(template, param, conn);
+        close(conn);
+        return jp;
+    }
+
+    public void RunMultiRep() throws JRException, Exception {
+        long start = System.currentTimeMillis();
+        Connection conn = getConnection();
+        HashMap<String, Object> params = bindParam("MaterijalniNaloziView1Iterator","Id");
+
+        try {
+            HttpServletResponse response = getResponse();
+            ServletOutputStream out = response.getOutputStream();
+            response.setHeader("Cache-Control", "max-age=0");
+            response.setContentType("application/pdf");
+
+            // Add all to list
+            List<JasperPrint> jasperPrintList = new ArrayList<JasperPrint>();
+            jasperPrintList.add(addReport(pathRoot+pathB, params));
+            jasperPrintList.add(addReport(pathRoot+pathC, params));
+            jasperPrintList.add(addReport(pathRoot+pathC, params));
+            jasperPrintList.add(addReport(pathRoot+pathC1, params));
+            jasperPrintList.add(addReport(pathRoot+pathP, params));
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            JRPdfExporter exporter = new JRPdfExporter();
+            exporter.setExporterInput(SimpleExporterInput.getInstance(jasperPrintList));
+            exporter.setExporterOutput(new SimpleOutputStreamExporterOutput(baos));
+            SimplePdfExporterConfiguration configuration = new SimplePdfExporterConfiguration();
+            configuration.setCreatingBatchModeBookmarks(true);
+            exporter.setConfiguration(configuration);
+            exporter.exportReport();
+            out.write(baos.toByteArray());
+            out.flush();
+            out.close();
+
+        } catch (Exception jex) {
+            jex.printStackTrace();
+        } finally {
+            close(conn);
+        }
+
+        System.err.println("Vrijeme generiranja PDF: " + (System.currentTimeMillis() - start));
+    }
+    
+  
+    
+    
+   
+
+    public void setDatumOd(RichInputDate datumOd) {
+        this.datumOd = datumOd;
+    }
+
+    public RichInputDate getDatumOd() {
+        return datumOd;
+    }
+
+    public void setDatumDo(RichInputDate datumDo) {
+        this.datumDo = datumDo;
+    }
+
+    public RichInputDate getDatumDo() {
+        return datumDo;
+    }
+
+    public void setJMBOC(RichInputText JMBOC) {
+        this.JMBOC = JMBOC;
+    }
+
+    public RichInputText getJMBOC() {
+        return JMBOC;
+    }
+
+    public String runMulti() {
+        try {
+            RunMultiRep();
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+        return null;
+    }
+
+   
+}
